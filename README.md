@@ -53,14 +53,17 @@ The app starts on http://localhost:8080. The H2 console is at http://localhost:8
 ./mvnw test
 ```
 
+The tests need no environment variables: a fake JWT secret and admin credentials for tests live in
+`src/test/resources/config/application.properties`.
+
 ## Questions
 
 | # | Question               | PR link |
 |---|------------------------|---------|
-| 1 | Task Manager API       |         |
-| 2 | URL Shortener          |         |
-| 3 | Authentication & Roles |         |
-| 4 | Product Catalog        |         |
-| 5 | Order Service          |         |
+| 1 | Task Manager API       | [#2](https://github.com/sherin-vargheese-3/be-interview-prep-1/pull/2) |
+| 2 | URL Shortener          | [#4](https://github.com/sherin-vargheese-3/be-interview-prep-1/pull/4) |
+| 3 | Authentication & Roles | [#8](https://github.com/sherin-vargheese-3/be-interview-prep-1/pull/8) |
+| 4 | Product Catalog        | [#6](https://github.com/sherin-vargheese-3/be-interview-prep-1/pull/6) |
+| 5 | Order Service          | [#10](https://github.com/sherin-vargheese-3/be-interview-prep-1/pull/10) |
 
 Video:
