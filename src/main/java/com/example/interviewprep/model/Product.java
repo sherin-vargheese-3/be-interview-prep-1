@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
@@ -17,6 +18,7 @@ import org.hibernate.annotations.CreationTimestamp;
 		@Index(name = "idx_product_price", columnList = "price"),
 		@Index(name = "idx_product_name", columnList = "name")
 })
+@Check(name = "ck_product_stock_non_negative", constraints = "stock >= 0")
 public class Product {
 
 	@Id
