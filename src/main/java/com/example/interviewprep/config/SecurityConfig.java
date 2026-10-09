@@ -1,5 +1,7 @@
 package com.example.interviewprep.config;
 
+import com.example.interviewprep.exception.JsonAccessDeniedHandler;
+import com.example.interviewprep.exception.JsonAuthenticationEntryPoint;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -31,7 +33,10 @@ public class SecurityConfig {
 	private static final String SHORT_LINK_REDIRECT = "^/[A-Za-z0-9]{7}(\\?.*)?$";
 
 	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	public SecurityFilterChain securityFilterChain(
+			HttpSecurity http,
+			JsonAuthenticationEntryPoint authenticationEntryPoint,
+			JsonAccessDeniedHandler accessDeniedHandler) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.httpBasic(AbstractHttpConfigurer::disable)
@@ -48,7 +53,12 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole(ADMIN)
 						.requestMatchers("/actuator/**").hasRole(ADMIN)
 						.anyRequest().authenticated())
+				.exceptionHandling(exceptions -> exceptions
+						.authenticationEntryPoint(authenticationEntryPoint)
+						.accessDeniedHandler(accessDeniedHandler))
 				.oauth2ResourceServer(resourceServer -> resourceServer
+						.authenticationEntryPoint(authenticationEntryPoint)
+						.accessDeniedHandler(accessDeniedHandler)
 						.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 		return http.build();
 	}
