@@ -16,6 +16,7 @@ import com.example.interviewprep.repository.ProductRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
@@ -23,10 +24,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
@@ -38,6 +43,8 @@ public class OrderService {
 
 	private final ProductRepository productRepository;
 
+	private final CacheManager cacheManager;
+
 	private final TransactionTemplate writeTransaction;
 
 	private final TransactionTemplate readTransaction;
@@ -45,9 +52,11 @@ public class OrderService {
 	public OrderService(
 			OrderRepository orderRepository,
 			ProductRepository productRepository,
+			CacheManager cacheManager,
 			PlatformTransactionManager transactionManager) {
 		this.orderRepository = orderRepository;
 		this.productRepository = productRepository;
+		this.cacheManager = cacheManager;
 		this.writeTransaction = new TransactionTemplate(transactionManager);
 		this.readTransaction = new TransactionTemplate(transactionManager);
 		this.readTransaction.setReadOnly(true);
@@ -73,9 +82,11 @@ public class OrderService {
 		Order order = findOwnedOrder(userId, orderId);
 		OrderResponse response = OrderResponse.from(order);
 		if (cancelledNow) {
-			order.getItems().stream()
+			List<OrderItem> items = order.getItems().stream()
 					.sorted(Comparator.comparing(OrderItem::getProductId))
-					.forEach(item -> productRepository.releaseStock(item.getProductId(), item.getQuantity()));
+					.toList();
+			items.forEach(item -> productRepository.releaseStock(item.getProductId(), item.getQuantity()));
+			evictProductsAfterCommit(items.stream().map(OrderItem::getProductId).toList());
 		}
 		return response;
 	}
@@ -95,7 +106,20 @@ public class OrderService {
 		lines.forEach(line -> order.addItem(line.productId(), line.quantity()));
 		Order saved = orderRepository.saveAndFlush(order);
 		lines.forEach(this::reserve);
+		evictProductsAfterCommit(lines.stream().map(OrderItemRequest::productId).toList());
 		return OrderResponse.from(saved);
+	}
+
+	private void evictProductsAfterCommit(Collection<Long> productIds) {
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				Cache cache = cacheManager.getCache(ProductService.CACHE_NAME);
+				if (cache != null) {
+					productIds.forEach(cache::evict);
+				}
+			}
+		});
 	}
 
 	private Optional<OrderResponse> findPrevious(Long userId, String idempotencyKey, String requestHash) {

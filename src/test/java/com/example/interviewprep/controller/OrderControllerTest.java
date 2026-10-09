@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.interviewprep.config.JwtProperties;
 import com.example.interviewprep.model.Product;
 import com.example.interviewprep.repository.ProductRepository;
+import com.example.interviewprep.service.ProductService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -423,6 +424,47 @@ class OrderControllerTest {
 				.andExpect(jsonPath("$.id").value(orderId))
 				.andExpect(jsonPath("$.status").value("CANCELLED"));
 		assertThat(stockOf(productId)).isEqualTo(5);
+	}
+
+	@Test
+	void cachedProductShowsTheStockLeftAfterAnOrder() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		mockMvc.perform(get("/api/products/{id}", productId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(jsonPath("$.stock").value(5));
+
+		placedOrderId(token, productId, 2);
+
+		mockMvc.perform(get("/api/products/{id}", productId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.stock").value(3));
+	}
+
+	@Test
+	void cachedProductShowsTheStockReturnedByACancel() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		long orderId = placedOrderId(token, productId, 2);
+		mockMvc.perform(get("/api/products/{id}", productId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(jsonPath("$.stock").value(3));
+
+		cancelOrder(token, orderId).andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/products/{id}", productId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.stock").value(5));
+	}
+
+	@Test
+	void rejectedOrderLeavesTheCachedProductInPlace() throws Exception {
+		Long productId = saveProduct(1);
+		String token = tokenFor(nextUserId());
+		mockMvc.perform(get("/api/products/{id}", productId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(jsonPath("$.stock").value(1));
+
+		placeOrder(token, UUID.randomUUID().toString(), itemsBody(productId, 2)).andExpect(status().isConflict());
+
+		assertThat(cacheManager.getCache(ProductService.CACHE_NAME).get(productId)).isNotNull();
 	}
 
 	private ResultActions cancelOrder(String token, long orderId) throws Exception {
