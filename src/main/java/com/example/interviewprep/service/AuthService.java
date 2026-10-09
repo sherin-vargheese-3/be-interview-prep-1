@@ -60,6 +60,16 @@ public class AuthService {
 				.orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS));
 	}
 
+	@Transactional
+	public boolean createAdminIfAbsent(String email, String rawPassword) {
+		String normalizedEmail = normalizeEmail(email);
+		if (repository.existsByEmail(normalizedEmail)) {
+			return false;
+		}
+		createUser(normalizedEmail, rawPassword, Role.ADMIN);
+		return true;
+	}
+
 	private AppUser createUser(String email, String rawPassword, Role role) {
 		if (repository.existsByEmail(email)) {
 			throw new ConflictException(EMAIL_TAKEN);
