@@ -2,6 +2,7 @@ package com.example.interviewprep.service;
 
 import com.example.interviewprep.dto.ShortUrlRequest;
 import com.example.interviewprep.dto.ShortUrlResponse;
+import com.example.interviewprep.dto.ShortUrlStatsResponse;
 import com.example.interviewprep.exception.GoneException;
 import com.example.interviewprep.exception.NotFoundException;
 import com.example.interviewprep.exception.ShortCodeGenerationException;
@@ -62,6 +63,11 @@ public class ShortUrlService {
 		}
 		repository.incrementVisitCount(code);
 		return shortUrl.getOriginalUrl();
+	}
+
+	@Transactional(readOnly = true)
+	public ShortUrlStatsResponse stats(String code) {
+		return ShortUrlStatsResponse.from(findShortUrl(code));
 	}
 
 	private ShortUrl findShortUrl(String code) {

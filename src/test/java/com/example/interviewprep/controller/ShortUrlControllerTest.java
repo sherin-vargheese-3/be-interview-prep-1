@@ -164,12 +164,51 @@ class ShortUrlControllerTest {
 		assertThat(visitCountOf(code)).isEqualTo(visitors);
 	}
 
+	@Test
+	void statsShowOriginalUrlVisitCountAndDates() throws Exception {
+		Instant expiresAt = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+		String code = createCode(LONG_URL, expiresAt);
+		mockMvc.perform(get("/{code}", code)).andExpect(status().isFound());
+		mockMvc.perform(get("/{code}", code)).andExpect(status().isFound());
+
+		ResultActions result = mockMvc.perform(get("/api/urls/{code}/stats", code));
+
+		result.andExpect(status().isOk())
+				.andExpect(jsonPath("$.code").value(code))
+				.andExpect(jsonPath("$.originalUrl").value(LONG_URL))
+				.andExpect(jsonPath("$.visitCount").value(2))
+				.andExpect(jsonPath("$.createdAt").isNotEmpty())
+				.andExpect(jsonPath("$.expiresAt").value(expiresAt.toString()));
+	}
+
+	@Test
+	void statsRemainAvailableAfterExpiry() throws Exception {
+		repository.save(new ShortUrl("Expired", LONG_URL, Instant.now().minus(1, ChronoUnit.MINUTES)));
+
+		ResultActions result = mockMvc.perform(get("/api/urls/{code}/stats", "Expired"));
+
+		result.andExpect(status().isOk())
+				.andExpect(jsonPath("$.visitCount").value(0));
+	}
+
+	@Test
+	void statsForUnknownCodeReturnNotFound() throws Exception {
+		ResultActions result = mockMvc.perform(get("/api/urls/{code}/stats", "missing"));
+
+		result.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.status").value(404));
+	}
+
 	private long visitCountOf(String code) {
 		return repository.findByCode(code).map(ShortUrl::getVisitCount).orElseThrow();
 	}
 
 	private String createCode(String url) throws Exception {
-		String response = shorten(url, null)
+		return createCode(url, null);
+	}
+
+	private String createCode(String url, Instant expiresAt) throws Exception {
+		String response = shorten(url, expiresAt)
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		JsonNode created = objectMapper.readTree(response);
