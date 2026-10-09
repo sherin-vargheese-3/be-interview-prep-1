@@ -1,0 +1,63 @@
+package com.example.interviewprep.service;
+
+import com.example.interviewprep.dto.PageResponse;
+import com.example.interviewprep.dto.ProductFilter;
+import com.example.interviewprep.dto.ProductResponse;
+import com.example.interviewprep.exception.BadRequestException;
+import com.example.interviewprep.model.Product;
+import com.example.interviewprep.repository.ProductRepository;
+import com.example.interviewprep.repository.ProductSpecifications;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Stream;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class ProductService {
+
+	private static final Set<String> SORTABLE_FIELDS = Set.of("id", "name", "category", "price", "stock", "rating", "createdAt");
+
+	private final ProductRepository repository;
+
+	public ProductService(ProductRepository repository) {
+		this.repository = repository;
+	}
+
+	@Transactional(readOnly = true)
+	public PageResponse<ProductResponse> list(ProductFilter filter, Pageable pageable) {
+		validatePriceRange(filter);
+		validateSort(pageable.getSort());
+		return PageResponse.from(repository.findAll(toSpecification(filter), pageable).map(ProductResponse::from));
+	}
+
+	private static Specification<Product> toSpecification(ProductFilter filter) {
+		List<Specification<Product>> specifications = Stream.of(
+						ProductSpecifications.categoryEquals(filter.category()),
+						ProductSpecifications.priceAtLeast(filter.minPrice()),
+						ProductSpecifications.priceAtMost(filter.maxPrice()),
+						ProductSpecifications.inStockOnly(filter.inStock()),
+						ProductSpecifications.nameContains(filter.q()))
+				.filter(Objects::nonNull)
+				.toList();
+		return Specification.allOf(specifications);
+	}
+
+	private static void validatePriceRange(ProductFilter filter) {
+		if (filter.minPrice() != null && filter.maxPrice() != null && filter.minPrice().compareTo(filter.maxPrice()) > 0) {
+			throw new BadRequestException("minPrice must not be greater than maxPrice");
+		}
+	}
+
+	private static void validateSort(Sort sort) {
+		for (Sort.Order order : sort) {
+			if (!SORTABLE_FIELDS.contains(order.getProperty())) {
+				throw new BadRequestException("Cannot sort by '" + order.getProperty() + "'; sortable fields are " + SORTABLE_FIELDS.stream().sorted().toList());
+			}
+		}
+	}
+}
