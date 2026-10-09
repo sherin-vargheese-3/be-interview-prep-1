@@ -3,7 +3,6 @@ package com.example.interviewprep.exception;
 import com.example.interviewprep.dto.ApiError;
 import com.example.interviewprep.dto.ApiError.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,14 +29,6 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleInvalidBody(MethodArgumentNotValidException ex, HttpServletRequest request) {
 		List<FieldErrorDetail> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
 				.map(error -> new FieldErrorDetail(error.getField(), error.getDefaultMessage()))
-				.toList();
-		return respond(ApiError.of(HttpStatus.BAD_REQUEST, "Validation failed", request.getRequestURI(), fieldErrors));
-	}
-
-	@ExceptionHandler(ConstraintViolationException.class)
-	public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
-		List<FieldErrorDetail> fieldErrors = ex.getConstraintViolations().stream()
-				.map(violation -> new FieldErrorDetail(violation.getPropertyPath().toString(), violation.getMessage()))
 				.toList();
 		return respond(ApiError.of(HttpStatus.BAD_REQUEST, "Validation failed", request.getRequestURI(), fieldErrors));
 	}
