@@ -1,5 +1,6 @@
 package com.example.interviewprep.task;
 
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,7 +26,7 @@ public class TaskController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public TaskResponse create(@RequestBody TaskRequest request) {
+	public TaskResponse create(@Valid @RequestBody TaskRequest request) {
 		return service.create(request);
 	}
 
@@ -40,7 +41,7 @@ public class TaskController {
 	}
 
 	@PutMapping("/{id}")
-	public TaskResponse update(@PathVariable Long id, @RequestBody TaskRequest request) {
+	public TaskResponse update(@PathVariable Long id, @Valid @RequestBody TaskRequest request) {
 		return service.update(id, request);
 	}
 
