@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -42,6 +44,16 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
 		List<FieldErrorDetail> fieldErrors = List.of(new FieldErrorDetail(ex.getName(), "has an invalid value"));
 		return respond(ApiError.of(HttpStatus.BAD_REQUEST, "Validation failed", request.getRequestURI(), fieldErrors));
+	}
+
+	@ExceptionHandler(AuthenticationException.class)
+	public ResponseEntity<ApiError> handleAuthentication(HttpServletRequest request) {
+		return respond(ApiError.of(HttpStatus.UNAUTHORIZED, JsonAuthenticationEntryPoint.MESSAGE, request.getRequestURI()));
+	}
+
+	@ExceptionHandler(AccessDeniedException.class)
+	public ResponseEntity<ApiError> handleAccessDenied(HttpServletRequest request) {
+		return respond(ApiError.of(HttpStatus.FORBIDDEN, JsonAccessDeniedHandler.MESSAGE, request.getRequestURI()));
 	}
 
 	@ExceptionHandler(Exception.class)
