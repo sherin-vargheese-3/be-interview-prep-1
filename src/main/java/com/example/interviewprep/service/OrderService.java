@@ -1,9 +1,11 @@
 package com.example.interviewprep.service;
 
 import com.example.interviewprep.dto.OrderItemRequest;
+import com.example.interviewprep.dto.OrderPlacement;
 import com.example.interviewprep.dto.OrderRequest;
 import com.example.interviewprep.dto.OrderResponse;
 import com.example.interviewprep.exception.BadRequestException;
+import com.example.interviewprep.exception.IdempotencyKeyReusedException;
 import com.example.interviewprep.exception.InsufficientStockException;
 import com.example.interviewprep.exception.NotFoundException;
 import com.example.interviewprep.model.Order;
@@ -15,10 +17,14 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class OrderService {
@@ -29,25 +35,64 @@ public class OrderService {
 
 	private final ProductRepository productRepository;
 
-	public OrderService(OrderRepository orderRepository, ProductRepository productRepository) {
+	private final TransactionTemplate writeTransaction;
+
+	private final TransactionTemplate readTransaction;
+
+	public OrderService(
+			OrderRepository orderRepository,
+			ProductRepository productRepository,
+			PlatformTransactionManager transactionManager) {
 		this.orderRepository = orderRepository;
 		this.productRepository = productRepository;
+		this.writeTransaction = new TransactionTemplate(transactionManager);
+		this.readTransaction = new TransactionTemplate(transactionManager);
+		this.readTransaction.setReadOnly(true);
 	}
 
-	@Transactional
-	public OrderResponse place(Long userId, String idempotencyKey, OrderRequest request) {
+	public OrderPlacement place(Long userId, String idempotencyKey, OrderRequest request) {
 		validateIdempotencyKey(idempotencyKey);
 		List<OrderItemRequest> lines = normalize(request.items());
-		Order order = new Order(userId, idempotencyKey, hash(lines));
+		String requestHash = hash(lines);
+		return findPrevious(userId, idempotencyKey, requestHash)
+				.map(OrderPlacement::replayed)
+				.orElseGet(() -> create(userId, idempotencyKey, requestHash, lines));
+	}
+
+	@Transactional(readOnly = true)
+	public OrderResponse get(Long userId, Long orderId) {
+		return OrderResponse.from(findOwnedOrder(userId, orderId));
+	}
+
+	private OrderPlacement create(Long userId, String idempotencyKey, String requestHash, List<OrderItemRequest> lines) {
+		try {
+			return OrderPlacement.created(writeTransaction.execute(status -> reserveAll(userId, idempotencyKey, requestHash, lines)));
+		} catch (DataIntegrityViolationException ex) {
+			return findPrevious(userId, idempotencyKey, requestHash)
+					.map(OrderPlacement::replayed)
+					.orElseThrow(() -> ex);
+		}
+	}
+
+	private OrderResponse reserveAll(Long userId, String idempotencyKey, String requestHash, List<OrderItemRequest> lines) {
+		Order order = new Order(userId, idempotencyKey, requestHash);
 		lines.forEach(line -> order.addItem(line.productId(), line.quantity()));
 		Order saved = orderRepository.saveAndFlush(order);
 		lines.forEach(this::reserve);
 		return OrderResponse.from(saved);
 	}
 
-	@Transactional(readOnly = true)
-	public OrderResponse get(Long userId, Long orderId) {
-		return OrderResponse.from(findOwnedOrder(userId, orderId));
+	private Optional<OrderResponse> findPrevious(Long userId, String idempotencyKey, String requestHash) {
+		return readTransaction.execute(status -> orderRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)
+				.map(order -> requireSameRequest(order, requestHash))
+				.map(OrderResponse::from));
+	}
+
+	private static Order requireSameRequest(Order order, String requestHash) {
+		if (!order.getRequestHash().equals(requestHash)) {
+			throw new IdempotencyKeyReusedException();
+		}
+		return order;
 	}
 
 	private void reserve(OrderItemRequest line) {

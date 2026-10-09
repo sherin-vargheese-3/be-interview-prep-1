@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -96,6 +97,109 @@ class OrderControllerTest {
 		assertThat(Collections.frequency(statuses, 409)).isEqualTo(40);
 		assertThat(stockOf(productId)).isZero();
 		assertThat(ordersContaining(productId)).isEqualTo(10);
+	}
+
+	@Test
+	void retryWithTheSameKeyReturnsTheOriginalOrder() throws Exception {
+		Long productId = saveProduct(5);
+		Long userId = nextUserId();
+		String token = tokenFor(userId);
+		String key = UUID.randomUUID().toString();
+		MvcResult first = placeOrder(token, key, itemsBody(productId, 2)).andExpect(status().isCreated()).andReturn();
+
+		ResultActions retry = placeOrder(token, key, itemsBody(productId, 2));
+
+		retry.andExpect(status().isOk())
+				.andExpect(header().string(OrderController.IDEMPOTENT_REPLAYED_HEADER, "true"))
+				.andExpect(jsonPath("$.id").value(orderIdOf(first)));
+		assertThat(retry.andReturn().getResponse().getContentAsString()).isEqualTo(first.getResponse().getContentAsString());
+		assertThat(ordersFor(userId, key)).isEqualTo(1);
+		assertThat(stockOf(productId)).isEqualTo(3);
+	}
+
+	@Test
+	void simultaneousRetriesCreateOneOrder() throws Exception {
+		Long productId = saveProduct(20);
+		Long userId = nextUserId();
+		String token = tokenFor(userId);
+		String key = UUID.randomUUID().toString();
+		String body = itemsBody(productId, 2);
+
+		List<MvcResult> results = runConcurrently(10, () -> placeOrder(token, key, body).andReturn());
+
+		List<Integer> statuses = results.stream().map(result -> result.getResponse().getStatus()).toList();
+		List<Long> orderIds = new ArrayList<>();
+		for (MvcResult result : results) {
+			orderIds.add(orderIdOf(result));
+		}
+		assertThat(Collections.frequency(statuses, 201)).isEqualTo(1);
+		assertThat(Collections.frequency(statuses, 200)).isEqualTo(9);
+		assertThat(orderIds).containsOnly(orderIds.get(0));
+		assertThat(ordersFor(userId, key)).isEqualTo(1);
+		assertThat(stockOf(productId)).isEqualTo(18);
+	}
+
+	@Test
+	void reusingAKeyWithADifferentPayloadIsRejected() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		String key = UUID.randomUUID().toString();
+		placeOrder(token, key, itemsBody(productId, 1)).andExpect(status().isCreated());
+
+		ResultActions reuse = placeOrder(token, key, itemsBody(productId, 2));
+
+		reuse.andExpect(status().isUnprocessableEntity())
+				.andExpect(jsonPath("$.status").value(422))
+				.andExpect(jsonPath("$.message").value("Idempotency-Key was already used with a different request"));
+		assertThat(stockOf(productId)).isEqualTo(4);
+	}
+
+	@Test
+	void retryWithReorderedAndSplitLinesIsTheSameRequest() throws Exception {
+		Long first = saveProduct(5);
+		Long second = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		String key = UUID.randomUUID().toString();
+		String original = "{\"items\": [{\"productId\": %d, \"quantity\": 2}, {\"productId\": %d, \"quantity\": 1}]}"
+				.formatted(first, second);
+		String reshaped = "{\"items\": [{\"productId\": %d, \"quantity\": 1}, {\"productId\": %d, \"quantity\": 1}, {\"productId\": %d, \"quantity\": 1}]}"
+				.formatted(second, first, first);
+		placeOrder(token, key, original).andExpect(status().isCreated());
+
+		ResultActions retry = placeOrder(token, key, reshaped);
+
+		retry.andExpect(status().isOk());
+		assertThat(stockOf(first)).isEqualTo(3);
+		assertThat(stockOf(second)).isEqualTo(4);
+	}
+
+	@Test
+	void theSameKeyFromAnotherUserPlacesTheirOwnOrder() throws Exception {
+		Long productId = saveProduct(5);
+		String key = UUID.randomUUID().toString();
+		MvcResult mine = placeOrder(tokenFor(nextUserId()), key, itemsBody(productId, 1)).andExpect(status().isCreated()).andReturn();
+
+		MvcResult theirs = placeOrder(tokenFor(nextUserId()), key, itemsBody(productId, 1)).andReturn();
+
+		assertThat(theirs.getResponse().getStatus()).isEqualTo(201);
+		assertThat(orderIdOf(theirs)).isNotEqualTo(orderIdOf(mine));
+		assertThat(stockOf(productId)).isEqualTo(3);
+	}
+
+	@Test
+	void failedOrderCanBeRetriedWithTheSameKey() throws Exception {
+		Long productId = saveProduct(1);
+		Long userId = nextUserId();
+		String token = tokenFor(userId);
+		String key = UUID.randomUUID().toString();
+		placeOrder(token, key, itemsBody(productId, 2)).andExpect(status().isConflict());
+		jdbcTemplate.update("update product set stock = stock + 1 where id = ?", productId);
+
+		ResultActions retry = placeOrder(token, key, itemsBody(productId, 2));
+
+		retry.andExpect(status().isCreated());
+		assertThat(ordersFor(userId, key)).isEqualTo(1);
+		assertThat(stockOf(productId)).isZero();
 	}
 
 	@Test
