@@ -26,10 +26,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser
 class ProductControllerTest {
 
 	private static final String TEST_CATEGORY = "Testware";
@@ -154,6 +156,7 @@ class ProductControllerTest {
 	}
 
 	@Test
+	@WithMockUser(roles = "ADMIN")
 	void unknownProductReturnsNotFound() throws Exception {
 		mockMvc.perform(get("/api/products/{id}", 999_999))
 				.andExpect(status().isNotFound())
@@ -165,6 +168,7 @@ class ProductControllerTest {
 	}
 
 	@Test
+	@WithMockUser(roles = "ADMIN")
 	void updateIsVisibleOnTheNextLookup() throws Exception {
 		Product product = save("Old Name", TEST_CATEGORY, "10.00", 1);
 		mockMvc.perform(get("/api/products/{id}", product.getId())).andExpect(jsonPath("$.name").value("Old Name"));
@@ -180,6 +184,7 @@ class ProductControllerTest {
 	}
 
 	@Test
+	@WithMockUser(roles = "ADMIN")
 	void invalidUpdateReturnsFieldErrors() throws Exception {
 		Product product = save("Valid", TEST_CATEGORY, "10.00", 1);
 		String body = """
@@ -193,6 +198,7 @@ class ProductControllerTest {
 	}
 
 	@Test
+	@WithMockUser(roles = "ADMIN")
 	void deletedProductIsNoLongerReturned() throws Exception {
 		Product product = save("Doomed", TEST_CATEGORY, "10.00", 1);
 		mockMvc.perform(get("/api/products/{id}", product.getId())).andExpect(status().isOk());
