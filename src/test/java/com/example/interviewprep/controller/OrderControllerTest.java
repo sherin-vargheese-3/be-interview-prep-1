@@ -346,6 +346,89 @@ class OrderControllerTest {
 				.andExpect(jsonPath("$.message").value("Order " + orderId + " not found"));
 	}
 
+	@Test
+	void cancelReturnsTheStock() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		long orderId = placedOrderId(token, productId, 2);
+
+		ResultActions result = cancelOrder(token, orderId);
+
+		result.andExpect(status().isOk())
+				.andExpect(jsonPath("$.id").value(orderId))
+				.andExpect(jsonPath("$.status").value("CANCELLED"))
+				.andExpect(jsonPath("$.items[0].quantity").value(2));
+		assertThat(stockOf(productId)).isEqualTo(5);
+	}
+
+	@Test
+	void cancellingTwiceReturnsTheStockOnce() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		long orderId = placedOrderId(token, productId, 2);
+		cancelOrder(token, orderId).andExpect(status().isOk());
+
+		ResultActions second = cancelOrder(token, orderId);
+
+		second.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("CANCELLED"));
+		assertThat(stockOf(productId)).isEqualTo(5);
+	}
+
+	@Test
+	void simultaneousCancelsReturnTheStockOnce() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		long orderId = placedOrderId(token, productId, 3);
+
+		List<MvcResult> results = runConcurrently(10, () -> cancelOrder(token, orderId).andReturn());
+
+		assertThat(results).allSatisfy(result -> assertThat(result.getResponse().getStatus()).isEqualTo(200));
+		assertThat(stockOf(productId)).isEqualTo(5);
+	}
+
+	@Test
+	void anotherUserCannotCancelMyOrder() throws Exception {
+		Long productId = saveProduct(5);
+		String owner = tokenFor(nextUserId());
+		long orderId = placedOrderId(owner, productId, 2);
+
+		ResultActions result = cancelOrder(tokenFor(nextUserId()), orderId);
+
+		result.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.message").value("Order " + orderId + " not found"));
+		assertThat(stockOf(productId)).isEqualTo(3);
+		mockMvc.perform(get("/api/orders/{id}", orderId).header(HttpHeaders.AUTHORIZATION, "Bearer " + owner))
+				.andExpect(jsonPath("$.status").value("PLACED"));
+	}
+
+	@Test
+	void cancellingAnUnknownOrderReturnsNotFound() throws Exception {
+		ResultActions result = cancelOrder(tokenFor(nextUserId()), 999_999L);
+
+		result.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void retryAfterCancelReplaysTheCancelledOrder() throws Exception {
+		Long productId = saveProduct(5);
+		String token = tokenFor(nextUserId());
+		String key = UUID.randomUUID().toString();
+		long orderId = orderIdOf(placeOrder(token, key, itemsBody(productId, 2)).andExpect(status().isCreated()).andReturn());
+		cancelOrder(token, orderId).andExpect(status().isOk());
+
+		ResultActions retry = placeOrder(token, key, itemsBody(productId, 2));
+
+		retry.andExpect(status().isOk())
+				.andExpect(jsonPath("$.id").value(orderId))
+				.andExpect(jsonPath("$.status").value("CANCELLED"));
+		assertThat(stockOf(productId)).isEqualTo(5);
+	}
+
+	private ResultActions cancelOrder(String token, long orderId) throws Exception {
+		return mockMvc.perform(post("/api/orders/{id}/cancel", orderId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
+	}
+
 	private ResultActions placeOrder(String token, String idempotencyKey, String body) throws Exception {
 		return mockMvc.perform(post("/api/orders")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)

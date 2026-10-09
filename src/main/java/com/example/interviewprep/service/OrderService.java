@@ -4,16 +4,19 @@ import com.example.interviewprep.dto.OrderItemRequest;
 import com.example.interviewprep.dto.OrderPlacement;
 import com.example.interviewprep.dto.OrderRequest;
 import com.example.interviewprep.dto.OrderResponse;
+import com.example.interviewprep.enums.OrderStatus;
 import com.example.interviewprep.exception.BadRequestException;
 import com.example.interviewprep.exception.IdempotencyKeyReusedException;
 import com.example.interviewprep.exception.InsufficientStockException;
 import com.example.interviewprep.exception.NotFoundException;
 import com.example.interviewprep.model.Order;
+import com.example.interviewprep.model.OrderItem;
 import com.example.interviewprep.repository.OrderRepository;
 import com.example.interviewprep.repository.ProductRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +65,19 @@ public class OrderService {
 	@Transactional(readOnly = true)
 	public OrderResponse get(Long userId, Long orderId) {
 		return OrderResponse.from(findOwnedOrder(userId, orderId));
+	}
+
+	@Transactional
+	public OrderResponse cancel(Long userId, Long orderId) {
+		boolean cancelledNow = orderRepository.updateStatus(orderId, userId, OrderStatus.PLACED, OrderStatus.CANCELLED) == 1;
+		Order order = findOwnedOrder(userId, orderId);
+		OrderResponse response = OrderResponse.from(order);
+		if (cancelledNow) {
+			order.getItems().stream()
+					.sorted(Comparator.comparing(OrderItem::getProductId))
+					.forEach(item -> productRepository.releaseStock(item.getProductId(), item.getQuantity()));
+		}
+		return response;
 	}
 
 	private OrderPlacement create(Long userId, String idempotencyKey, String requestHash, List<OrderItemRequest> lines) {
