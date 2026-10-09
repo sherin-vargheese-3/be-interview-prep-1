@@ -2,8 +2,10 @@ package com.example.interviewprep.service;
 
 import com.example.interviewprep.dto.PageResponse;
 import com.example.interviewprep.dto.ProductFilter;
+import com.example.interviewprep.dto.ProductRequest;
 import com.example.interviewprep.dto.ProductResponse;
 import com.example.interviewprep.exception.BadRequestException;
+import com.example.interviewprep.exception.NotFoundException;
 import com.example.interviewprep.model.Product;
 import com.example.interviewprep.repository.ProductRepository;
 import com.example.interviewprep.repository.ProductSpecifications;
@@ -33,6 +35,27 @@ public class ProductService {
 		validatePriceRange(filter);
 		validateSort(pageable.getSort());
 		return PageResponse.from(repository.findAll(toSpecification(filter), pageable).map(ProductResponse::from));
+	}
+
+	@Transactional(readOnly = true)
+	public ProductResponse getById(Long id) {
+		return ProductResponse.from(findProduct(id));
+	}
+
+	@Transactional
+	public ProductResponse update(Long id, ProductRequest request) {
+		Product product = findProduct(id);
+		product.update(request.name(), request.category(), request.price(), request.stock(), request.rating());
+		return ProductResponse.from(product);
+	}
+
+	@Transactional
+	public void delete(Long id) {
+		repository.delete(findProduct(id));
+	}
+
+	private Product findProduct(Long id) {
+		return repository.findById(id).orElseThrow(() -> new NotFoundException("Product " + id + " not found"));
 	}
 
 	private static Specification<Product> toSpecification(ProductFilter filter) {
