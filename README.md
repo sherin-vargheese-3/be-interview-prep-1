@@ -33,6 +33,17 @@ curl -s localhost:8080/api/users/me -H "Authorization: Bearer $TOKEN"
 Tokens expire after 15 minutes. `GET /api/admin/users`, product updates and deletes, and actuator
 endpoints other than health need an `ADMIN` token.
 
+Orders need an `Idempotency-Key` header (1 to 100 characters, a UUID per logical order). Resending
+the same key and body returns the original order with `200` and `Idempotent-Replayed: true`:
+
+```bash
+curl -s -X POST localhost:8080/api/orders -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)" -H 'Content-Type: application/json' \
+  -d '{"items":[{"productId":1,"quantity":2}]}'
+curl -s localhost:8080/api/orders/1 -H "Authorization: Bearer $TOKEN"
+curl -s -X POST localhost:8080/api/orders/1/cancel -H "Authorization: Bearer $TOKEN"
+```
+
 The app starts on http://localhost:8080. The H2 console is at http://localhost:8080/h2-console
 (JDBC URL `jdbc:h2:mem:prep`, user `sa`, empty password).
 
