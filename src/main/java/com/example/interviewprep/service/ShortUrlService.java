@@ -2,14 +2,18 @@ package com.example.interviewprep.service;
 
 import com.example.interviewprep.dto.ShortUrlRequest;
 import com.example.interviewprep.dto.ShortUrlResponse;
+import com.example.interviewprep.exception.GoneException;
+import com.example.interviewprep.exception.NotFoundException;
 import com.example.interviewprep.exception.ShortCodeGenerationException;
 import com.example.interviewprep.model.ShortUrl;
 import com.example.interviewprep.repository.ShortUrlRepository;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ShortUrlService {
@@ -48,6 +52,20 @@ public class ShortUrlService {
 			}
 		}
 		throw new ShortCodeGenerationException("Could not allocate a unique short code, please retry");
+	}
+
+	@Transactional
+	public String resolveAndCountVisit(String code) {
+		ShortUrl shortUrl = findShortUrl(code);
+		if (shortUrl.isExpiredAt(Instant.now())) {
+			throw new GoneException("Short URL " + code + " has expired");
+		}
+		repository.incrementVisitCount(code);
+		return shortUrl.getOriginalUrl();
+	}
+
+	private ShortUrl findShortUrl(String code) {
+		return repository.findByCode(code).orElseThrow(() -> new NotFoundException("Short URL " + code + " not found"));
 	}
 
 	private ShortUrlResponse toResponse(ShortUrl shortUrl) {
