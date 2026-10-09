@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -21,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ProductService {
+
+	public static final String CACHE_NAME = "products";
 
 	private static final Set<String> SORTABLE_FIELDS = Set.of("id", "name", "category", "price", "stock", "rating", "createdAt");
 
@@ -37,11 +42,13 @@ public class ProductService {
 		return PageResponse.from(repository.findAll(toSpecification(filter), pageable).map(ProductResponse::from));
 	}
 
+	@Cacheable(value = CACHE_NAME, key = "#id")
 	@Transactional(readOnly = true)
 	public ProductResponse getById(Long id) {
 		return ProductResponse.from(findProduct(id));
 	}
 
+	@CachePut(value = CACHE_NAME, key = "#id")
 	@Transactional
 	public ProductResponse update(Long id, ProductRequest request) {
 		Product product = findProduct(id);
@@ -49,6 +56,7 @@ public class ProductService {
 		return ProductResponse.from(product);
 	}
 
+	@CacheEvict(value = CACHE_NAME, key = "#id")
 	@Transactional
 	public void delete(Long id) {
 		repository.delete(findProduct(id));
