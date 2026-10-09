@@ -116,6 +116,26 @@ class AuthControllerTest {
 	}
 
 	@Test
+	void passwordOver72BytesWithFewerCharactersIsRejected() throws Exception {
+		String multibytePassword = "\u20ac".repeat(25);
+
+		ResultActions result = register(uniqueEmail(), multibytePassword);
+
+		result.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.fieldErrors[0].field").value("password"))
+				.andExpect(jsonPath("$.fieldErrors[0].message").value("must be at most 72 bytes when UTF-8 encoded"));
+	}
+
+	@Test
+	void passwordOfExactly72BytesIsAccepted() throws Exception {
+		String multibytePassword = "\u20ac".repeat(24);
+
+		ResultActions result = register(uniqueEmail(), multibytePassword);
+
+		result.andExpect(status().isCreated());
+	}
+
+	@Test
 	void loginReturnsABearerTokenForFifteenMinutes() throws Exception {
 		String email = uniqueEmail();
 		register(email, PASSWORD).andExpect(status().isCreated());
