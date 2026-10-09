@@ -1,6 +1,7 @@
-package com.example.interviewprep.common;
+package com.example.interviewprep.exception;
 
-import com.example.interviewprep.common.ApiError.FieldErrorDetail;
+import com.example.interviewprep.dto.ApiError;
+import com.example.interviewprep.dto.ApiError.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;

@@ -1,5 +1,9 @@
-package com.example.interviewprep.task;
+package com.example.interviewprep.controller;
 
+import com.example.interviewprep.dto.TaskRequest;
+import com.example.interviewprep.dto.TaskResponse;
+import com.example.interviewprep.enums.TaskStatus;
+import com.example.interviewprep.service.TaskService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;

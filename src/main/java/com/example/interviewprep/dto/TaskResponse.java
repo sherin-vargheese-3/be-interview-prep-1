@@ -1,5 +1,7 @@
-package com.example.interviewprep.task;
+package com.example.interviewprep.dto;
 
+import com.example.interviewprep.enums.TaskStatus;
+import com.example.interviewprep.model.Task;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -11,7 +13,7 @@ public record TaskResponse(
 		LocalDate dueDate,
 		Instant createdAt) {
 
-	static TaskResponse from(Task task) {
+	public static TaskResponse from(Task task) {
 		return new TaskResponse(
 				task.getId(),
 				task.getTitle(),

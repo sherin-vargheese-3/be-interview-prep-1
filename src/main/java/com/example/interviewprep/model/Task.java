@@ -1,5 +1,6 @@
-package com.example.interviewprep.task;
+package com.example.interviewprep.model;
 
+import com.example.interviewprep.enums.TaskStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

@@ -1,4 +1,4 @@
-package com.example.interviewprep.common;
+package com.example.interviewprep.exception;
 
 import org.springframework.http.HttpStatus;
 

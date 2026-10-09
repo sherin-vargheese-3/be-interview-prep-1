@@ -1,6 +1,11 @@
-package com.example.interviewprep.task;
+package com.example.interviewprep.service;
 
-import com.example.interviewprep.common.NotFoundException;
+import com.example.interviewprep.dto.TaskRequest;
+import com.example.interviewprep.dto.TaskResponse;
+import com.example.interviewprep.enums.TaskStatus;
+import com.example.interviewprep.exception.NotFoundException;
+import com.example.interviewprep.model.Task;
+import com.example.interviewprep.repository.TaskRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

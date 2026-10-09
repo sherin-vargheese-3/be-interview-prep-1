@@ -1,4 +1,4 @@
-package com.example.interviewprep.common;
+package com.example.interviewprep.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
