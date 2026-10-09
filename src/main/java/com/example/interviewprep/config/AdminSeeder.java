@@ -28,9 +28,9 @@ public class AdminSeeder implements ApplicationRunner {
 			return;
 		}
 		if (authService.createAdminIfAbsent(properties.email(), properties.password())) {
-			log.info("Seeded admin user {}", properties.email());
+			log.info("Seeded admin user");
 		} else {
-			log.info("Admin user {} already exists", properties.email());
+			log.info("Admin user already exists");
 		}
 	}
 }
