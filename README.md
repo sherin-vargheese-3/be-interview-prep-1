@@ -1,0 +1,36 @@
+# be-interview-prep
+
+Backend interview prep assignment: five Spring Boot features, each delivered as its own pull request.
+
+## Stack
+
+- Java 21, Spring Boot 3.5
+- Maven (wrapper included, no local Maven install needed)
+- H2 in-memory database
+
+## Run the app
+
+```bash
+./mvnw spring-boot:run
+```
+
+The app starts on http://localhost:8080. The H2 console is at http://localhost:8080/h2-console
+(JDBC URL `jdbc:h2:mem:prep`, user `sa`, empty password).
+
+## Run the tests
+
+```bash
+./mvnw test
+```
+
+## Questions
+
+| # | Question               | PR link |
+|---|------------------------|---------|
+| 1 | Task Manager API       |         |
+| 2 | URL Shortener          |         |
+| 3 | Authentication & Roles |         |
+| 4 | Product Catalog        |         |
+| 5 | Order Service          |         |
+
+Video:
